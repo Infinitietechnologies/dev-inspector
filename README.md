@@ -8,6 +8,24 @@ i18n keys from rendered text, and flash DOM updates as they happen.
 Zero runtime dependencies. Never ships to production when gated correctly
 (see [Enabling it](#enabling-it-dead-code-elimination)).
 
+![Hover: component name, size, and file:line chip](docs/screenshot-hover.png)
+
+![Locked panel: source chain with file:line, i18n key match, tabs](docs/screenshot-panel.png)
+
+## Try it — demo app
+
+A runnable demo lives in [`demo/`](demo/):
+
+```sh
+cd demo
+npm install
+npm run dev
+```
+
+Open the printed URL and follow the "Things to try" list on the page: Alt+hover
+anything, click to lock the source chain, open files in your editor, check the
+i18n and State tabs, and toggle the Zap button while the on-page clock ticks.
+
 ## Features
 
 - **Hover highlight** with a `<Component> · file.tsx:42` chip and element
