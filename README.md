@@ -1,97 +1,106 @@
 # next-dev-inspector
 
+[![CI](https://github.com/Infinitietechnologies/dev-inspector/actions/workflows/ci.yml/badge.svg)](https://github.com/Infinitietechnologies/dev-inspector/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/next-dev-inspector)](https://www.npmjs.com/package/next-dev-inspector)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Dev-only floating inspector for **Next.js + React 18/19**. Hover or click any
 DOM element to see **which source file (with line number) rendered it**, open
 it straight in your editor, view live props and store state, reverse-lookup
-i18n keys from rendered text, and flash DOM updates as they happen.
+i18n keys from rendered text, flash component re-renders, and copy the whole
+context for your AI assistant.
 
 Zero runtime dependencies. Never ships to production when gated correctly
-(see [Enabling it](#enabling-it-dead-code-elimination)).
+(see [Production safety](#production-safety-dead-code-elimination)).
 
 ![Hover: component name, size, and file:line chip](docs/screenshot-hover.png)
 
 ![Locked panel: source chain with file:line, i18n key match, tabs](docs/screenshot-panel.png)
 
-## Try it — demo app
+## Contents
 
-A runnable demo lives in [`demo/`](demo/):
-
-```sh
-cd demo
-npm install
-npm run dev
-```
-
-Open the printed URL and follow the "Things to try" list on the page: Alt+hover
-anything, click to lock the source chain, open files in your editor, check the
-i18n and State tabs, and toggle the Zap button while the on-page clock ticks.
+- [Features](#features)
+- [Requirements](#requirements)
+- [Quick start](#quick-start)
+- [Production safety (dead-code elimination)](#production-safety-dead-code-elimination)
+- [Controls](#controls)
+- [True re-render flashes (optional hook)](#true-re-render-flashes-optional-hook)
+- [Copy for AI](#copy-for-ai)
+- [Configuration](#configuration)
+- [API reference](#api-reference)
+- [How it works](#how-it-works)
+- [Limitations](#limitations)
+- [Troubleshooting](#troubleshooting)
+- [Demo app](#demo-app)
+- [Development](#development)
+- [Project status](#project-status)
 
 ## Features
 
-- **Hover highlight** with a `<Component> · file.tsx:42` chip and element
-  dimensions
-- **Click to lock** a details panel with tabs:
-  - **Source** — the full owner-component chain with `file:line` per entry;
-    click a row to open it in your editor; copy paths and class lists
-  - **Props** — live props of any component in the chain (compact JSON tree)
-  - **State** — snapshot of your store (Redux, Zustand, anything — you supply
-    the getter)
-  - **History** — revisit the last 8 inspected elements
-- **i18n reverse lookup** — see which translation key produced the rendered
-  text (i18next-shaped resources)
-- **Box-model overlay** — margin/padding bands like browser devtools
-- **Alt+hover** quick inspect (no arming needed; modifier configurable)
-- **Arrow keys** walk the DOM (parent/child/siblings) while locked
-- **Re-render flasher** — with the optional [early hook](#true-re-render-flashes-optional-hook)
-  installed, outlines components as they re-render, labeled with the component
-  name and a per-element counter; without it, falls back to flashing raw DOM
-  mutations
-- **Copy for AI** — one click copies the component chain with file:line paths,
-  props, classes, and i18n keys, ready to paste into Claude Code, Cursor, or
-  any coding assistant
-- **Draggable button cluster**, position persisted to `localStorage`
-- Hotkey **Ctrl+Shift+X** to arm/disarm, **Esc** to close (configurable)
+**Find the source**
 
-## Install
+- Hover highlight with a `<Component> · file.tsx:42` chip and element dimensions
+- Click to lock the full owner-component chain, each entry with `file:line`
+- Click any entry to open that file in your editor at the exact line
+- Box-model overlay (margin/padding bands) like browser devtools
+
+**Understand the state**
+
+- **Props** tab — live props of any component in the chain (compact JSON tree)
+- **State** tab — snapshot of your store; Redux, Zustand, Jotai, anything —
+  you supply the getter
+- **i18n reverse lookup** — which translation key produced this rendered text
+  (i18next-shaped resources)
+- **History** tab — revisit the last 8 inspected elements
+
+**See it move**
+
+- **Re-render flasher** — with the optional [early hook](#true-re-render-flashes-optional-hook),
+  outlines components as they re-render, labeled `Clock ×3`; without it, falls
+  back to flashing raw DOM mutations
+
+**Work fast**
+
+- **Copy for AI** — one click copies chain + paths + props + i18n keys, ready
+  to paste into Claude Code, Cursor, or any coding assistant
+- Alt+hover quick inspect, arrow-key DOM walking, configurable hotkeys
+- Draggable button cluster, position persisted to `localStorage`
+
+## Requirements
+
+| | |
+|---|---|
+| React / ReactDOM | >= 18 (peer deps); best on 19 |
+| Next.js | `next dev` with Turbopack (verified) or webpack (fallback path, untested) |
+| Environment | Development builds only — relies on React's dev-only fiber internals |
+| Runtime deps | None |
+
+## Quick start
 
 ```sh
 npm i -D next-dev-inspector
 ```
 
-`react` and `react-dom` (>= 18, best on 19) are peer dependencies.
-
-## Enabling it (dead-code elimination)
-
-The inspector reads React's dev-only fiber internals (`_debugStack`,
-`_debugOwner`), so it only works in development builds — and you should make
-sure it's *compiled out* of production bundles. Gate it on constants your
-bundler can statically evaluate:
-
-### Pages Router (`_app.tsx`)
+Mount it anywhere in your client tree:
 
 ```tsx
-import dynamic from "next/dynamic";
+import DevInspector from "next-dev-inspector";
 
-const DevInspector =
-  process.env.NODE_ENV === "development" &&
-  process.env.NEXT_PUBLIC_DEV_INSPECTOR === "true"
-    ? dynamic(() => import("next-dev-inspector"), { ssr: false })
-    : null;
-
-export default function App({ Component, pageProps }) {
-  return (
-    <>
-      <Component {...pageProps} />
-      {DevInspector && <DevInspector />}
-    </>
-  );
-}
+<DevInspector />
 ```
 
-### App Router (`app/layout.tsx`)
+Then hold <kbd>Alt</kbd> and hover anything — or press
+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> and click. For real projects,
+use the env-gated mount below so the package never reaches production bundles.
 
-The package bundle carries `"use client"`, so it can be referenced from a
-server layout via a small client wrapper:
+## Production safety (dead-code elimination)
+
+The inspector reads React's dev-only fiber internals (`_debugStack`,
+`_debugOwner`), so it only works in development — and it should be *compiled
+out* of production bundles. Gate it on constants your bundler can statically
+evaluate:
+
+### App Router
 
 ```tsx
 // app/dev-inspector.tsx
@@ -111,7 +120,29 @@ export function DevInspectorMount() {
 }
 ```
 
-Then render `<DevInspectorMount />` at the end of your root layout's body.
+Render `<DevInspectorMount />` at the end of your root layout's `<body>`.
+
+### Pages Router
+
+```tsx
+// pages/_app.tsx
+import dynamic from "next/dynamic";
+
+const DevInspector =
+  process.env.NODE_ENV === "development" &&
+  process.env.NEXT_PUBLIC_DEV_INSPECTOR === "true"
+    ? dynamic(() => import("next-dev-inspector"), { ssr: false })
+    : null;
+
+export default function App({ Component, pageProps }) {
+  return (
+    <>
+      <Component {...pageProps} />
+      {DevInspector && <DevInspector />}
+    </>
+  );
+}
+```
 
 Run with the flag:
 
@@ -122,43 +153,21 @@ NEXT_PUBLIC_DEV_INSPECTOR=true next dev
 Because both conditions are build-time constants, the `import()` — and the
 whole package — is eliminated from production output.
 
-## Configuration
+## Controls
 
-All props are optional:
+| Action | Effect |
+|---|---|
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> | Arm / disarm the inspector (configurable via `hotkey`) |
+| <kbd>Alt</kbd> + hover | Quick inspect without arming (configurable via `hoverModifier`) |
+| Click (while inspecting) | Lock the details panel on that element |
+| <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> | Walk the DOM (parent / first child / siblings) while locked |
+| <kbd>Esc</kbd> | Close panel, disarm |
+| Crosshair button | Arm / disarm — also the drag handle for the cluster |
+| Zap button | Toggle the re-render / DOM-update flasher |
+| Source row click | Open that file in your editor |
+| `{ }` icon on a row | Jump to that entry's Props tab |
 
-```tsx
-<DevInspector
-  enabled={true}                       // render nothing when false
-  hotkey="ctrl+shift+x"                // arm/disarm combo
-  hoverModifier="alt"                  // "alt" | "ctrl" | "meta" | "shift" | "none"
-  storageKey="dev-inspector-pos"       // localStorage key for button position
-  zIndex={2147483000}
-  colors={{ accent: "#7c3aed", accentLight: "#a78bfa", flash: "#f97316" }}
-  editorEndpoint="/__nextjs_launch-editor"          // GET file/line1/column1
-  stackFramesEndpoint="/__nextjs_original-stack-frames" // POST fallback; null disables
-  getI18nData={() => ({ data: i18n.store.data, language: i18n.language })}
-  getStateSnapshot={() => store.getState()}
-  stateLabel="Redux store"
-/>
-```
-
-### Store snapshots (`getStateSnapshot`)
-
-The State tab appears only when you pass a getter. Any store works — sync or
-async:
-
-```tsx
-// Redux (dynamic import keeps the store out of the widget's graph)
-getStateSnapshot={async () => (await import("@/lib/redux/store")).store.getState()}
-
-// Zustand
-getStateSnapshot={() => useBoundStore.getState()}
-
-// Jotai (with a store instance)
-getStateSnapshot={() => Object.fromEntries(myAtoms.map(a => [a.debugLabel, store.get(a)]))}
-```
-
-### True re-render flashes (optional hook)
+## True re-render flashes (optional hook)
 
 By default the Zap button flashes *DOM mutations* — a memoized re-render that
 changes no DOM stays invisible. For true re-render tracking, React must see a
@@ -191,7 +200,7 @@ replacing it.
 
 ![Re-render flash with component name](docs/screenshot-flash.png)
 
-### Copy for AI
+## Copy for AI
 
 The locked panel's footer has a **Copy for AI** button that puts a compact,
 paste-ready context block on the clipboard:
@@ -212,17 +221,101 @@ i18n matches:
 ```
 
 Paste it into your AI assistant and it knows exactly which file and component
-you're talking about. (`buildAiContext`/`serializeValue` are also exported if
-you want the same block programmatically.)
+you're talking about. (`buildAiContext` / `serializeValue` are also exported
+if you want the same block programmatically.)
+
+## Configuration
+
+All props are optional:
+
+```tsx
+<DevInspector
+  enabled={true}
+  hotkey="ctrl+shift+x"
+  hoverModifier="alt"
+  storageKey="dev-inspector-pos"
+  zIndex={2147483000}
+  colors={{ accent: "#7c3aed", accentLight: "#a78bfa", flash: "#f97316" }}
+  editorEndpoint="/__nextjs_launch-editor"
+  stackFramesEndpoint="/__nextjs_original-stack-frames"
+  getI18nData={() => ({ data: i18n.store.data, language: i18n.language })}
+  getStateSnapshot={() => store.getState()}
+  stateLabel="Redux store"
+/>
+```
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | `boolean` | `true` | Render nothing when `false` (combine with env gating for DCE) |
+| `hotkey` | `string` | `"ctrl+shift+x"` | Arm/disarm combo — modifiers + key joined with `+` |
+| `hoverModifier` | `"alt" \| "ctrl" \| "meta" \| "shift" \| "none"` | `"alt"` | Held key that enables hover-inspect without arming; `"none"` disables |
+| `storageKey` | `string` | `"dev-inspector-pos"` | `localStorage` key for the button-cluster position |
+| `zIndex` | `number` | `2147483000` | Base z-index for all overlay layers |
+| `colors` | `{ accent?, accentLight?, flash? }` | violet / orange | Palette overrides, hex `#rrggbb` |
+| `editorEndpoint` | `string` | `"/__nextjs_launch-editor"` | GET endpoint that opens `file`/`line1`/`column1` in the editor |
+| `stackFramesEndpoint` | `string \| null` | `"/__nextjs_original-stack-frames"` | POST fallback resolver for webpack-dev frames; `null` disables |
+| `getI18nData` | `() => { data, language? } \| null` | — | Enables i18n reverse lookup (see below) |
+| `getStateSnapshot` | `() => unknown \| Promise<unknown>` | — | Enables the State tab (see below) |
+| `stateLabel` | `string` | `"Store"` | Heading shown in the State tab |
+
+### Store snapshots (`getStateSnapshot`)
+
+The State tab appears only when you pass a getter. Any store works — sync or
+async:
+
+```tsx
+// Redux (dynamic import keeps the store out of the widget's graph)
+getStateSnapshot={async () => (await import("@/lib/redux/store")).store.getState()}
+
+// Zustand
+getStateSnapshot={() => useBoundStore.getState()}
+
+// Jotai (with a store instance)
+getStateSnapshot={() => Object.fromEntries(myAtoms.map(a => [a.debugLabel, store.get(a)]))}
+```
 
 ### i18n reverse lookup (`getI18nData`)
 
 Pass i18next-shaped resources (`{ [lng]: { [namespace]: nestedTree } }`) and
-the current language. When you lock an element, the Source tab lists
-translation keys whose value matches its rendered text — exact matches first,
-then `{{interpolated}}` values matched by static prefix.
+the current language:
 
-## How it works (and its limits)
+```tsx
+getI18nData={() => ({ data: i18n.store.data, language: i18n.language })}
+```
+
+When you lock an element, the Source tab lists translation keys whose value
+matches its rendered text — exact matches first, then `{{interpolated}}`
+values matched by static prefix.
+
+### Other dev servers
+
+`editorEndpoint` and `stackFramesEndpoint` exist so non-Next dev servers can
+be targeted (e.g. Vite's `/__open-in-editor`, with
+`stackFramesEndpoint={null}`) — but Vite serves different source-map URLs and
+this is untested territory. The package is Next-first.
+
+## API reference
+
+### `next-dev-inspector`
+
+| Export | Kind | Purpose |
+|---|---|---|
+| `DevInspector` (also default) | component | The inspector widget |
+| `buildAiContext(input)` | function | The "Copy for AI" text, programmatically |
+| `serializeValue(value)` | function | The compact, cycle-safe value renderer it uses |
+| `DevInspectorProps`, `DevInspectorColors`, `HoverModifier`, `AiContextInput`, `InspectedEntry`, `ResolvedLocation`, `ResolverOptions`, `RawStackFrame`, `I18nMatch`, `FlashEvent`, `BoxModel`, `BoxEdges`, `SourceMapPayload`, `OriginalPosition` | types | Public types |
+
+### `next-dev-inspector/hook`
+
+| Export | Kind | Purpose |
+|---|---|---|
+| `DevInspectorHook` (also default) | component | Server-safe inline `<script>` mount; renders nothing outside development |
+| `devInspectorHookScript` | string | The raw script, for `_document` or custom injection |
+
+The main bundle is marked `"use client"`; the hook bundle is not, so it can
+be imported from server components.
+
+## How it works
 
 - **React 19 removed `_debugSource`.** Source locations are recovered from the
   dev-only fiber `_debugStack` — an `Error` captured at each JSX callsite —
@@ -236,28 +329,71 @@ then `{{interpolated}}` values matched by static prefix.
   server resolver endpoint.
 - **Open in editor** uses `GET /__nextjs_launch-editor?file=&line1=&column1=`,
   which accepts `file://` URLs, absolute paths, and project-relative paths.
-  Other dev servers (e.g. Vite's `/__open-in-editor`) can be targeted via
-  `editorEndpoint` — but note Vite serves different map URLs, which is
-  untested territory.
-- **Flasher:** without the optional hook it observes *DOM mutations* (React
-  commits), so a memoized re-render that changes no DOM won't flash. The
-  `next-dev-inspector/hook` inline script installs a minimal
+- **Re-render hook:** the inline script installs a minimal
   `__REACT_DEVTOOLS_GLOBAL_HOOK__` before React loads and walks each commit
-  as a diff against the alternate fiber tree (pruning reused subtrees, the
-  way React DevTools does) — that upgrade makes flashes track real
-  re-renders with component names.
+  as a diff against the alternate fiber tree, pruning subtrees whose child
+  pointer is unchanged (the way React DevTools does) — `PerformedWork` flags
+  alone are stale on fibers React reused without re-cloning.
+
+## Limitations
+
+- **Development only** — production React builds carry none of the fiber
+  debug data this relies on. Gate the mount so bundlers strip it entirely.
+- **Fiber internals are not public API.** They have been stable across React
+  18/19 dev builds, but a future React release could move them.
+- **Without the hook**, the flasher shows DOM mutations, not re-renders; a
+  memoized re-render that changes no DOM won't flash.
 - **Library components** resolve to the caller's JSX callsite (the first
-  app-owned frame) — that's usually what you want anyway.
+  app-owned frame) — usually what you want anyway.
+- **Editor opening** goes through the Next dev server; it opens whatever
+  editor the server's launch-editor detection finds (VS Code, etc.).
+
+## Troubleshooting
+
+| Symptom | Likely cause / fix |
+|---|---|
+| Every entry says `library / generated` | Source maps unreachable — make sure you're on `next dev` (not a production build) and same-origin |
+| Rows never resolve on webpack dev | The fallback POSTs to `stackFramesEndpoint`; check it isn't disabled and the dev server is current |
+| Clicking a row doesn't open the editor | The dev server's launch-editor couldn't find an editor — try opening a file from a Next error overlay to verify |
+| Flashes have no component names | The early hook isn't installed — see [the hook section](#true-re-render-flashes-optional-hook); it must render before React loads |
+| Hotkey does nothing | Another extension/app owns the combo — change the `hotkey` prop |
+| Widget visible in production | Your gating isn't statically analyzable — both conditions must be literal `process.env` checks |
+
+## Demo app
+
+A runnable demo lives in [`demo/`](demo/):
+
+```sh
+cd demo
+npm install
+npm run dev
+```
+
+Open the printed URL and follow the "Things to try" list on the page: Alt+hover
+anything, click to lock the source chain, open files in your editor, check the
+i18n and State tabs, toggle the Zap button while the on-page clock ticks, and
+try Copy for AI.
 
 ## Development
 
 ```sh
 npm install
-npm run test        # vitest (pure-logic suites: stack parsing, VLQ maps, i18n)
+npm run test        # vitest — stack parsing, VLQ source maps, i18n lookup, hook script, AI context
 npm run typecheck
-npm run build       # tsup → dist/ (ESM + CJS + d.ts)
+npm run build       # tsup → dist/ (ESM + CJS + d.ts, two entries: index + hook)
 ```
+
+CI runs all three on Node 20 and 22 for every push and PR.
+
+Layout: `src/` widget + pure modules · `tests/` vitest suites ·
+`demo/` runnable Next 16 demo · `docs/` README screenshots.
+
+## Project status
+
+Pre-1.0. Verified against Next 16 (Turbopack) + React 19. The webpack
+`next dev` fallback path exists but hasn't been exercised end-to-end yet;
+issue reports welcome.
 
 ## License
 
-MIT
+[MIT](LICENSE)
