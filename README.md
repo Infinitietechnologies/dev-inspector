@@ -1,8 +1,8 @@
 # next-dev-inspector
 
-[![CI](https://github.com/Infinitietechnologies/dev-inspector/actions/workflows/ci.yml/badge.svg)](https://github.com/Infinitietechnologies/dev-inspector/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/Infinitietechnologies/dev-inspector/ci.yml?branch=master&label=CI)](https://github.com/Infinitietechnologies/dev-inspector/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/next-dev-inspector)](https://www.npmjs.com/package/next-dev-inspector)
-[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/Infinitietechnologies/dev-inspector/blob/master/LICENSE)
 
 Dev-only floating inspector for **Next.js + React 18/19**. Hover or click any
 DOM element to see **which source file (with line number) rendered it**, open
@@ -13,9 +13,9 @@ context for your AI assistant.
 Zero runtime dependencies. Never ships to production when gated correctly
 (see [Production safety](#production-safety-dead-code-elimination)).
 
-![Hover: component name, size, and file:line chip](docs/screenshot-hover.png)
+![Hover: component name, size, and file:line chip](https://raw.githubusercontent.com/Infinitietechnologies/dev-inspector/master/docs/screenshot-hover.png)
 
-![Locked panel: source chain with file:line, i18n key match, tabs](docs/screenshot-panel.png)
+![Locked panel: source chain with file:line, i18n key match, tabs](https://raw.githubusercontent.com/Infinitietechnologies/dev-inspector/master/docs/screenshot-panel.png)
 
 ## Contents
 
@@ -198,7 +198,7 @@ per re-render — the widget detects it automatically. If the real React
 DevTools extension is present, the script piggybacks on its hook instead of
 replacing it.
 
-![Re-render flash with component name](docs/screenshot-flash.png)
+![Re-render flash with component name](https://raw.githubusercontent.com/Infinitietechnologies/dev-inspector/master/docs/screenshot-flash.png)
 
 ## Copy for AI
 
@@ -361,7 +361,7 @@ be imported from server components.
 
 ## Demo app
 
-A runnable demo lives in [`demo/`](demo/):
+A runnable demo lives in [`demo/`](https://github.com/Infinitietechnologies/dev-inspector/tree/master/demo):
 
 ```sh
 cd demo
@@ -396,4 +396,4 @@ issue reports welcome.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/Infinitietechnologies/dev-inspector/blob/master/LICENSE)
