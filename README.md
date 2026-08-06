@@ -254,6 +254,8 @@ All props are optional:
 | `zIndex` | `number` | `2147483000` | Base z-index for all overlay layers |
 | `colors` | `{ accent?, accentLight?, flash? }` | violet / orange | Palette overrides, hex `#rrggbb` |
 | `editorEndpoint` | `string` | `"/__nextjs_launch-editor"` | GET endpoint that opens `file`/`line1`/`column1` in the editor |
+| `editor` | `"vscode" \| "vscode-insiders" \| "cursor" \| "windsurf"` | — | Force an editor via its URL scheme instead of the dev server ([see below](#forcing-a-specific-editor)) |
+| `projectRoot` | `string` | — | Absolute project root; needed by `editor` to absolutize relative source paths |
 | `stackFramesEndpoint` | `string \| null` | `"/__nextjs_original-stack-frames"` | POST fallback resolver for webpack-dev frames; `null` disables |
 | `getI18nData` | `() => { data, language? } \| null` | — | Enables i18n reverse lookup (see below) |
 | `getStateSnapshot` | `() => unknown \| Promise<unknown>` | — | Enables the State tab (see below) |
@@ -287,6 +289,41 @@ getI18nData={() => ({ data: i18n.store.data, language: i18n.language })}
 When you lock an element, the Source tab lists translation keys whose value
 matches its rendered text — exact matches first, then `{{interpolated}}`
 values matched by static prefix.
+
+### Forcing a specific editor
+
+By default, clicking a source row asks the Next dev server to open the file,
+and Next's `launch-editor` guesses the editor from running processes. Two ways
+to pin it:
+
+1. **Env var (no code)** — set `REACT_EDITOR` when starting the dev server;
+   Next's launch-editor respects it:
+
+   ```bash
+   REACT_EDITOR=code next dev
+   ```
+
+2. **`editor` prop** — bypass the dev server entirely and open the editor's
+   own URL scheme (`vscode://file/…:line:col`) from the browser. Relative
+   source paths (Turbopack/webpack) need an absolute `projectRoot`, which you
+   can inline at build time:
+
+   ```js
+   // next.config.mjs
+   const nextConfig = {
+     env: { NEXT_PUBLIC_PROJECT_ROOT: process.cwd() },
+   };
+   ```
+
+   ```tsx
+   <DevInspector
+     editor="vscode" // or "vscode-insiders" | "cursor" | "windsurf"
+     projectRoot={process.env.NEXT_PUBLIC_PROJECT_ROOT}
+   />
+   ```
+
+   If a path can't be made absolute, the click falls back to the dev-server
+   endpoint, so this is safe to leave on.
 
 ### Other dev servers
 

@@ -14,6 +14,8 @@ export function DevInspectorMount() {
   if (process.env.NODE_ENV !== "development") return null;
   return (
     <DevInspector
+      editor="vscode"
+      projectRoot={process.env.NEXT_PUBLIC_PROJECT_ROOT}
       getI18nData={() => ({ data: resources, language: "en" })}
       getStateSnapshot={() => demoStore.getState()}
       stateLabel="Demo store"

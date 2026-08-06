@@ -23,6 +23,12 @@ interface ReactFiber {
   _debugStack?: Error | string | null;
 }
 
+export type EditorProtocol =
+  | "vscode"
+  | "vscode-insiders"
+  | "cursor"
+  | "windsurf";
+
 export interface ResolverOptions {
   /** GET endpoint that opens a file in the editor (Next.js dev server). */
   editorEndpoint?: string;
@@ -32,6 +38,15 @@ export interface ResolverOptions {
    * disable the fallback entirely (e.g. on Vite).
    */
   stackFramesEndpoint?: string | null;
+  /**
+   * Force a specific editor by opening its URL scheme
+   * (`vscode://file/…:line:col`) directly from the browser instead of asking
+   * the dev server. Relative source paths need `projectRoot` to become
+   * absolute; when they can't be, the dev-server endpoint is used as before.
+   */
+  editor?: EditorProtocol;
+  /** Absolute path of the project root, e.g. "/Users/me/app" or "C:/dev/app". */
+  projectRoot?: string;
 }
 
 export const DEFAULT_EDITOR_ENDPOINT = "/__nextjs_launch-editor";
@@ -314,11 +329,48 @@ export function resolveLocation(
   return promise;
 }
 
-/** Asks the dev server to open the file in the configured editor. */
+/**
+ * Editor deep link (`vscode://file/<abs path>:<line>:<col>`), or null when
+ * the source path can't be made absolute (relative path, no projectRoot).
+ */
+export function buildEditorUrl(
+  location: ResolvedLocation,
+  editor: EditorProtocol,
+  projectRoot?: string
+): string | null {
+  let path = location.editorFile;
+  if (path.startsWith("file://")) {
+    try {
+      path = decodeURIComponent(new URL(path).pathname);
+    } catch {
+      return null;
+    }
+  }
+  // "/C:/…" (URL pathname of a Windows file) → "C:/…"
+  path = path.replace(/\\/g, "/").replace(/^\/(?=[A-Za-z]:)/, "");
+  if (!path.startsWith("/") && !/^[A-Za-z]:/.test(path)) {
+    if (!projectRoot) return null;
+    const root = projectRoot.replace(/\\/g, "/").replace(/\/+$/, "");
+    path = `${root}/${path}`;
+  }
+  return `${editor}://file/${path}:${location.line1 ?? 1}:${location.column1 ?? 1}`;
+}
+
+/**
+ * Opens the file in the editor: via its URL scheme when `editor` is forced
+ * (and the path is resolvable), otherwise by asking the dev server.
+ */
 export function openInEditor(
   location: ResolvedLocation,
   options?: ResolverOptions
 ): void {
+  if (options?.editor) {
+    const url = buildEditorUrl(location, options.editor, options.projectRoot);
+    if (url) {
+      window.location.href = url;
+      return;
+    }
+  }
   const endpoint = options?.editorEndpoint ?? DEFAULT_EDITOR_ENDPOINT;
   const params = new URLSearchParams({
     file: location.editorFile,

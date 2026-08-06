@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 — 2026-08-06
+
+- **`editor` prop**: force a specific editor (`"vscode"`, `"vscode-insiders"`,
+  `"cursor"`, `"windsurf"`) by opening its URL scheme
+  (`vscode://file/…:line:col`) directly from the browser instead of asking
+  the dev server. Relative source paths are absolutized via the new
+  `projectRoot` prop; when that's not possible the dev-server endpoint is
+  used as before. `buildEditorUrl` and `EditorProtocol` are exported.
+
 ## 0.3.0 — 2026-08-06
 
 - **Single launcher button**: the two stacked floating buttons are now one

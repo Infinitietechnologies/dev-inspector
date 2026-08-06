@@ -24,6 +24,7 @@ import {
 import { createPortal } from "react-dom";
 import { CopyButton } from "./CopyButton";
 import {
+  EditorProtocol,
   InspectedEntry,
   ResolverOptions,
   buildInspectChain,
@@ -75,6 +76,18 @@ export interface DevInspectorProps {
   colors?: DevInspectorColors;
   /** Override the GET open-in-editor endpoint. Default: Next.js dev server. */
   editorEndpoint?: string;
+  /**
+   * Force a specific editor: opens `vscode://file/…` (or the equivalent
+   * scheme) directly from the browser instead of asking the dev server.
+   * Relative source paths (Turbopack/webpack) also need `projectRoot`.
+   */
+  editor?: EditorProtocol;
+  /**
+   * Absolute project root used to absolutize relative source paths for
+   * `editor` deep links, e.g. inlined at build time via
+   * `env: { NEXT_PUBLIC_PROJECT_ROOT: process.cwd() }` in next.config.
+   */
+  projectRoot?: string;
   /**
    * Override the POST server-side stack-frame resolver endpoint used as a
    * fallback for webpack-dev frames. Pass null to disable the fallback.
@@ -377,6 +390,8 @@ function DevInspectorInner({
   zIndex = 2147483000,
   colors,
   editorEndpoint,
+  editor,
+  projectRoot,
   stackFramesEndpoint,
   getI18nData,
   getStateSnapshot,
@@ -401,8 +416,8 @@ function DevInspectorInner({
 
   const parsedHotkey = useMemo(() => parseHotkey(hotkey), [hotkey]);
   const resolverOptions = useMemo<ResolverOptions>(
-    () => ({ editorEndpoint, stackFramesEndpoint }),
-    [editorEndpoint, stackFramesEndpoint]
+    () => ({ editorEndpoint, stackFramesEndpoint, editor, projectRoot }),
+    [editorEndpoint, stackFramesEndpoint, editor, projectRoot]
   );
 
   const activeRef = useRef(active);
