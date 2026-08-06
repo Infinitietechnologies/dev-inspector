@@ -42,8 +42,13 @@ i18n and State tabs, and toggle the Zap button while the on-page clock ticks.
 - **Box-model overlay** — margin/padding bands like browser devtools
 - **Alt+hover** quick inspect (no arming needed; modifier configurable)
 - **Arrow keys** walk the DOM (parent/child/siblings) while locked
-- **DOM-update flasher** — outlines elements as React commits mutations, with
-  per-element update counters
+- **Re-render flasher** — with the optional [early hook](#true-re-render-flashes-optional-hook)
+  installed, outlines components as they re-render, labeled with the component
+  name and a per-element counter; without it, falls back to flashing raw DOM
+  mutations
+- **Copy for AI** — one click copies the component chain with file:line paths,
+  props, classes, and i18n keys, ready to paste into Claude Code, Cursor, or
+  any coding assistant
 - **Draggable button cluster**, position persisted to `localStorage`
 - Hotkey **Ctrl+Shift+X** to arm/disarm, **Esc** to close (configurable)
 
@@ -153,6 +158,63 @@ getStateSnapshot={() => useBoundStore.getState()}
 getStateSnapshot={() => Object.fromEntries(myAtoms.map(a => [a.debugLabel, store.get(a)]))}
 ```
 
+### True re-render flashes (optional hook)
+
+By default the Zap button flashes *DOM mutations* — a memoized re-render that
+changes no DOM stays invisible. For true re-render tracking, React must see a
+DevTools hook **before it loads**, which a widget rendered by React cannot
+provide. So the package ships one as an inline script you mount yourself:
+
+```tsx
+// App Router — top of app/layout.tsx's <body> (it's a server-safe component)
+import { DevInspectorHook } from "next-dev-inspector/hook";
+
+<body>
+  <DevInspectorHook />   {/* renders nothing in production */}
+  {children}
+</body>
+```
+
+```tsx
+// Pages Router — pages/_document.tsx, inside <Head>
+import { devInspectorHookScript } from "next-dev-inspector/hook";
+
+{process.env.NODE_ENV === "development" && (
+  <script dangerouslySetInnerHTML={{ __html: devInspectorHookScript }} />
+)}
+```
+
+With the hook installed, flashes carry component names (`Clock ×3`) and fire
+per re-render — the widget detects it automatically. If the real React
+DevTools extension is present, the script piggybacks on its hook instead of
+replacing it.
+
+![Re-render flash with component name](docs/screenshot-flash.png)
+
+### Copy for AI
+
+The locked panel's footer has a **Copy for AI** button that puts a compact,
+paste-ready context block on the clipboard:
+
+```
+Inspected element (via next-dev-inspector):
+
+Component chain (innermost first):
+1. button — components/ProductCard.tsx:20
+2. <ProductCard> — app/page.tsx:26
+3. <Page> — (library / generated)
+
+Props of <ProductCard>:
+{ name: "Espresso", price: 2.5 }
+
+i18n matches:
+- product.add_to_cart (en) = "Add to cart"
+```
+
+Paste it into your AI assistant and it knows exactly which file and component
+you're talking about. (`buildAiContext`/`serializeValue` are also exported if
+you want the same block programmatically.)
+
 ### i18n reverse lookup (`getI18nData`)
 
 Pass i18next-shaped resources (`{ [lng]: { [namespace]: nestedTree } }`) and
@@ -177,10 +239,13 @@ then `{{interpolated}}` values matched by static prefix.
   Other dev servers (e.g. Vite's `/__open-in-editor`) can be targeted via
   `editorEndpoint` — but note Vite serves different map URLs, which is
   untested territory.
-- **Flasher caveat:** it observes *DOM mutations* (React commits), not
-  re-renders. A memoized re-render that changes no DOM won't flash. True
-  re-render tracking would require installing a `__REACT_DEVTOOLS_GLOBAL_HOOK__`
-  before React loads, which a widget rendered by React cannot do.
+- **Flasher:** without the optional hook it observes *DOM mutations* (React
+  commits), so a memoized re-render that changes no DOM won't flash. The
+  `next-dev-inspector/hook` inline script installs a minimal
+  `__REACT_DEVTOOLS_GLOBAL_HOOK__` before React loads and walks each commit
+  as a diff against the alternate fiber tree (pruning reused subtrees, the
+  way React DevTools does) — that upgrade makes flashes track real
+  re-renders with component names.
 - **Library components** resolve to the caller's JSX callsite (the first
   app-owned frame) — that's usually what you want anyway.
 

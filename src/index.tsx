@@ -6,6 +6,9 @@ export type {
   HoverModifier,
 } from "./DevInspector";
 
+export { buildAiContext, serializeValue } from "./aiContext";
+export type { AiContextInput } from "./aiContext";
+
 export type { InspectedEntry, ResolvedLocation, ResolverOptions } from "./fiber";
 export type { RawStackFrame } from "./parseStack";
 export type { I18nMatch } from "./i18nLookup";

@@ -1,14 +1,27 @@
 import { defineConfig } from "tsup";
 
-export default defineConfig({
-  entry: { index: "src/index.tsx" },
-  format: ["esm", "cjs"],
+const shared = {
+  format: ["esm", "cjs"] as ("esm" | "cjs")[],
   dts: true,
   sourcemap: true,
-  clean: true,
-  target: "es2020",
+  target: "es2020" as const,
   external: ["react", "react-dom"],
-  // Next.js App Router consumers can import the component directly from a
-  // server layout file; the directive marks the whole bundle as client-only.
-  banner: { js: '"use client";' },
-});
+};
+
+export default defineConfig([
+  {
+    ...shared,
+    entry: { index: "src/index.tsx" },
+    clean: true,
+    // Next.js App Router consumers can import the component directly from a
+    // server layout file; the directive marks the whole bundle as client-only.
+    banner: { js: '"use client";' },
+  },
+  {
+    ...shared,
+    // No "use client" — the hook component renders an inline <script> and
+    // must stay usable from server components (root layout, _document).
+    entry: { hook: "src/hook.tsx" },
+    clean: false,
+  },
+]);

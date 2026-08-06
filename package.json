@@ -1,6 +1,6 @@
 {
   "name": "next-dev-inspector",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Dev-only floating inspector for Next.js + React 18/19: hover or click any DOM element to see which source file rendered it, open it in your editor, view props/state, reverse-lookup i18n keys, and flash DOM updates.",
   "license": "MIT",
   "repository": {
@@ -21,6 +21,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./hook": {
+      "types": "./dist/hook.d.ts",
+      "import": "./dist/hook.js",
+      "require": "./dist/hook.cjs"
     }
   },
   "files": [
@@ -49,6 +54,7 @@
     "react-dom": ">=18"
   },
   "devDependencies": {
+    "@types/node": "^26.1.2",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "react": "^19.0.0",

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { DevInspectorHook } from "next-dev-inspector/hook";
 import { DevInspectorMount } from "./inspector";
 
 export const metadata: Metadata = {
@@ -21,6 +22,8 @@ export default function RootLayout({
           fontFamily: "system-ui, sans-serif",
         }}
       >
+        {/* Inline script that runs before React — enables re-render flashes */}
+        <DevInspectorHook />
         {children}
         <DevInspectorMount />
       </body>

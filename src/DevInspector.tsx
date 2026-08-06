@@ -23,7 +23,9 @@ import {
   resolveLocation,
 } from "./fiber";
 import { JsonTree } from "./JsonTree";
-import { startFlasher } from "./flasher";
+import { buildAiContext } from "./aiContext";
+import type { FlashEvent } from "./flasher";
+import { getRenderBridge, startFlasher, startRenderFlasher } from "./flasher";
 import { I18nMatch, findTranslationKeys } from "./i18nLookup";
 import { BoxModel, getBoxModel } from "./boxModel";
 import {
@@ -112,6 +114,7 @@ interface FlashRecord {
   id: number;
   rect: DOMRect;
   count: number;
+  name?: string | null;
 }
 
 type PanelTab = "source" | "props" | "state" | "history";
@@ -218,6 +221,49 @@ const iconButtonStyle: React.CSSProperties = {
   display: "flex",
   flexShrink: 0,
 };
+
+/** Text button that copies AI-assistant-ready context with feedback. */
+function CopyAiButton({
+  getText,
+  accent,
+}: {
+  getText: () => string;
+  accent: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    []
+  );
+  return (
+    <button
+      type="button"
+      title="Copy component chain, file paths and props — paste into your AI assistant"
+      onClick={() => {
+        navigator.clipboard?.writeText(getText()).then(() => {
+          setCopied(true);
+          if (timerRef.current) clearTimeout(timerRef.current);
+          timerRef.current = setTimeout(() => setCopied(false), 1200);
+        });
+      }}
+      style={{
+        background: "none",
+        border: `1px solid ${copied ? "#4ade80" : "#3f3f46"}`,
+        borderRadius: 5,
+        color: copied ? "#4ade80" : accent,
+        cursor: "pointer",
+        padding: "1px 8px",
+        font: "inherit",
+        flexShrink: 0,
+      }}
+    >
+      {copied ? "Copied ✓" : "Copy for AI"}
+    </button>
+  );
+}
 
 /** Margin (orange) and padding (green) bands around/inside a rect. */
 function BoxModelBands({
@@ -490,21 +536,24 @@ export function DevInspector({
     return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [enabled, parsedHotkey, lockElement]);
 
-  // DOM-update flasher
+  // Flasher: true re-renders when the early hook is installed (see
+  // "next-dev-inspector/hook"), raw DOM mutations otherwise.
   useEffect(() => {
     if (!flashOn) return;
-    const stop = startFlasher((events) => {
+    const handle = (events: FlashEvent[]) => {
       const records = events.map((ev) => ({
         id: ++flashIdRef.current,
         rect: ev.rect,
         count: ev.count,
+        name: ev.name,
       }));
       setFlashes((prev) => [...prev.slice(-40), ...records]);
       const ids = new Set(records.map((r) => r.id));
       setTimeout(() => {
         setFlashes((prev) => prev.filter((f) => !ids.has(f.id)));
       }, 600);
-    });
+    };
+    const stop = startRenderFlasher(handle) ?? startFlasher(handle);
     return () => {
       stop();
       setFlashes([]);
@@ -593,7 +642,7 @@ export function DevInspector({
               font: "10px/16px ui-monospace, monospace",
             }}
           >
-            ×{flash.count}
+            {flash.name ? `${flash.name} ` : ""}×{flash.count}
           </span>
         </div>
       ))}
@@ -924,14 +973,30 @@ export function DevInspector({
 
           <div
             style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
               padding: "6px 12px",
               borderTop: "1px solid #3f3f46",
               color: "#71717a",
               fontSize: 10,
             }}
           >
-            {modifierLabel ? `${modifierLabel}+hover to inspect · ` : ""}
-            ↑↓←→ walk DOM · click row → editor · Esc close
+            <span style={{ flex: 1 }}>
+              {modifierLabel ? `${modifierLabel}+hover to inspect · ` : ""}
+              ↑↓←→ walk DOM · click row → editor · Esc close
+            </span>
+            <CopyAiButton
+              accent={accentLight}
+              getText={() =>
+                buildAiContext({
+                  entries: locked.entries,
+                  i18nMatches: locked.i18nMatches,
+                  className: locked.className,
+                  selectedIdx,
+                })
+              }
+            />
           </div>
         </div>
       )}
@@ -1015,8 +1080,12 @@ export function DevInspector({
         </button>
         <button
           type="button"
-          aria-label="Toggle DOM update flashes"
-          title="Flash DOM updates as they happen"
+          aria-label="Toggle update flashes"
+          title={
+            getRenderBridge()
+              ? "Flash component re-renders as they happen"
+              : "Flash DOM updates as they happen (install next-dev-inspector/hook for true re-renders)"
+          }
           onClick={() => setFlashOn((prev) => !prev)}
           style={{
             width: BUTTON_SIZE,
