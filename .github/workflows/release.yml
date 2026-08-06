@@ -1,0 +1,33 @@
+# Publishes to npm when a v* tag is pushed, using npm trusted publishing
+# (GitHub OIDC — no token stored in the repo, packages get provenance).
+#
+# ONE-TIME SETUP on npmjs.com (package settings → Publishing access):
+#   Add trusted publisher: GitHub Actions,
+#   repository Infinitietechnologies/dev-inspector, workflow release.yml.
+#
+# Release flow: bump "version" in package.json, update CHANGELOG.md, commit,
+# then:  git tag vX.Y.Z && git push origin vX.Y.Z
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for npm trusted publishing / provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs a newer npm than Node 22 bundles
+      - run: npm install -g npm@latest
+      - run: npm ci
+      # prepublishOnly runs typecheck + tests + build before the tarball ships
+      - run: npm publish

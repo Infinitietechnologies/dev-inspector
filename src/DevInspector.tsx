@@ -12,7 +12,14 @@
  * through the chunk source maps client-side.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Component,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { CopyButton } from "./CopyButton";
 import {
@@ -222,6 +229,30 @@ const iconButtonStyle: React.CSSProperties = {
   flexShrink: 0,
 };
 
+/**
+ * A dev tool must never take the host app down with it: if anything in the
+ * widget throws during render, collapse the widget for this page load and
+ * leave the app untouched.
+ */
+class CrashShield extends Component<
+  { children: React.ReactNode },
+  { crashed: boolean }
+> {
+  state = { crashed: false };
+  static getDerivedStateFromError() {
+    return { crashed: true };
+  }
+  componentDidCatch(error: unknown) {
+    console.warn(
+      "[next-dev-inspector] The inspector crashed and was disabled for this page load. Please report this:",
+      error
+    );
+  }
+  render() {
+    return this.state.crashed ? null : this.props.children;
+  }
+}
+
 /** Text button that copies AI-assistant-ready context with feedback. */
 function CopyAiButton({
   getText,
@@ -314,7 +345,15 @@ function BoxModelBands({
   );
 }
 
-export function DevInspector({
+export function DevInspector(props: DevInspectorProps) {
+  return (
+    <CrashShield>
+      <DevInspectorInner {...props} />
+    </CrashShield>
+  );
+}
+
+function DevInspectorInner({
   enabled = true,
   hotkey = "ctrl+shift+x",
   hoverModifier = "alt",
@@ -420,18 +459,22 @@ export function DevInspector({
   );
 
   // Inspect listeners are always attached: armed mode OR modifier-held both
-  // work. Capture phase so the app never sees the click.
+  // work. Capture phase so the app never sees the click. The fiber-chain
+  // walk is coalesced to one per animation frame — mousemove can fire far
+  // more often than the screen paints.
   useEffect(() => {
     if (!enabled) return;
     const inspecting = (e: MouseEvent | PointerEvent) =>
       activeRef.current || modifierHeld(e, hoverModifier);
 
-    const onMouseMove = (e: MouseEvent) => {
-      if (!inspecting(e) || isOwnUi(e.target) || !(e.target instanceof Element)) {
-        if (hoverRef.current) setHover(null);
-        return;
-      }
-      const el = e.target;
+    let pendingEl: Element | null = null;
+    let rafId = 0;
+
+    const processHover = () => {
+      rafId = 0;
+      const el = pendingEl;
+      pendingEl = null;
+      if (!el || !el.isConnected) return;
       const chain = buildInspectChain(el);
       if (chain.length === 0) {
         if (hoverRef.current) setHover(null);
@@ -460,6 +503,16 @@ export function DevInspector({
       });
     };
 
+    const onMouseMove = (e: MouseEvent) => {
+      if (!inspecting(e) || isOwnUi(e.target) || !(e.target instanceof Element)) {
+        pendingEl = null;
+        if (hoverRef.current) setHover(null);
+        return;
+      }
+      pendingEl = e.target;
+      if (!rafId) rafId = requestAnimationFrame(processHover);
+    };
+
     const onClick = (e: MouseEvent) => {
       if (!inspecting(e) || isOwnUi(e.target)) return;
       e.preventDefault();
@@ -479,6 +532,7 @@ export function DevInspector({
     document.addEventListener("mousedown", swallow, true);
     document.addEventListener("pointerdown", swallow, true);
     return () => {
+      if (rafId) cancelAnimationFrame(rafId);
       document.removeEventListener("mousemove", onMouseMove, true);
       document.removeEventListener("click", onClick, true);
       document.removeEventListener("mousedown", swallow, true);

@@ -71,7 +71,7 @@ Zero runtime dependencies. Never ships to production when gated correctly
 | | |
 |---|---|
 | React / ReactDOM | >= 18 (peer deps); best on 19 |
-| Next.js | `next dev` with Turbopack (verified) or webpack (fallback path, untested) |
+| Next.js | `next dev` — Turbopack and webpack (`--webpack`) both verified |
 | Environment | Development builds only — relies on React's dev-only fiber internals |
 | Runtime deps | None |
 
@@ -383,16 +383,18 @@ npm run typecheck
 npm run build       # tsup → dist/ (ESM + CJS + d.ts, two entries: index + hook)
 ```
 
-CI runs all three on Node 20 and 22 for every push and PR.
+CI runs all three on Node 20 and 22 for every push and PR. Releases are
+tag-triggered: bump the version, update `CHANGELOG.md`, then
+`git tag vX.Y.Z && git push origin vX.Y.Z` — the release workflow publishes
+to npm with provenance via trusted publishing.
 
 Layout: `src/` widget + pure modules · `tests/` vitest suites ·
 `demo/` runnable Next 16 demo · `docs/` README screenshots.
 
 ## Project status
 
-Pre-1.0. Verified against Next 16 (Turbopack) + React 19. The webpack
-`next dev` fallback path exists but hasn't been exercised end-to-end yet;
-issue reports welcome.
+Pre-1.0. Verified against Next 16 + React 19, on both Turbopack and webpack
+dev servers. Issue reports welcome.
 
 ## License
 

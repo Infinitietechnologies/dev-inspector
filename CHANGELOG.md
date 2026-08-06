@@ -1,0 +1,40 @@
+# Changelog
+
+## 0.2.2 — 2026-08-06
+
+- **Crash shield**: the widget is wrapped in an error boundary — if anything
+  inside it throws during render, the inspector collapses for that page load
+  instead of crashing the host app.
+- **Hover throttling**: the fiber-chain walk on mousemove is coalesced to one
+  per animation frame.
+- **Webpack verified**: the `next dev --webpack` fallback path
+  (`webpack-internal:///` frames → server resolver) is now exercised
+  end-to-end against the demo; resolution matches Turbopack.
+- **Release automation**: tag-triggered npm publish via GitHub Actions with
+  npm trusted publishing (OIDC provenance).
+
+## 0.2.1 — 2026-08-06 (not published to npm)
+
+- README images switched to absolute URLs so they render on npmjs.com;
+  CI badge moved to shields.io; absolute LICENSE/demo links.
+- Richer npm keywords and description; README reorganized (TOC, controls
+  table, props/API reference, troubleshooting).
+
+## 0.2.0 — 2026-08-06 (first npm release)
+
+- `next-dev-inspector/hook`: optional early inline script that installs a
+  DevTools hook before React loads — the Zap flasher then shows true
+  component re-renders with names (commit diff walk with reused-subtree
+  pruning), instead of raw DOM mutations.
+- **Copy for AI**: panel button copying component chain + file:line + props +
+  i18n matches as a paste-ready block (`buildAiContext`/`serializeValue`
+  exported).
+- GitHub Actions CI (typecheck, tests, build on Node 20/22).
+
+## 0.1.0 — 2026-08-06 (not published to npm)
+
+- Initial extraction from the hyperlocal-web app: hover/click source
+  inspection with client-side Turbopack source-map decoding, open-in-editor,
+  props/state/history tabs, i18n reverse lookup, box-model overlay, DOM
+  walking, DOM-update flasher, draggable persisted UI. Zero runtime deps,
+  ESM+CJS, 20 unit tests.

@@ -1,6 +1,6 @@
 {
   "name": "next-dev-inspector",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Dev-only floating inspector for Next.js + React 18/19: click any DOM element to open its source file in your editor (click-to-component), view live props and store state, reverse-lookup i18n keys, flash component re-renders, and copy element context for AI assistants.",
   "license": "MIT",
   "repository": {
