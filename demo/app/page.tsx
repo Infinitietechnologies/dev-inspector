@@ -32,6 +32,11 @@ export default function Page() {
         <p>Things to try:</p>
         <ul style={{ lineHeight: 1.9 }}>
           <li>
+            Click the <b>wrench</b> button (bottom-left) — the crosshair and
+            Zap actions drop out one after another; click it again to tuck
+            them away. Drag it anywhere.
+          </li>
+          <li>
             <b>Alt+hover</b> any element — component name, size, and file:line
             appear instantly.
           </li>
@@ -48,8 +53,9 @@ export default function Page() {
             Add items to the cart, then open the <b>State</b> tab.
           </li>
           <li>
-            Toggle the <b>Zap</b> button and watch the clock flash every
-            second.
+            Toggle the <b>Zap</b> button in the menu and watch the clock flash
+            every second — the dot on the collapsed launcher shows it&apos;s
+            still on.
           </li>
           <li>
             While locked, walk the DOM with <b>arrow keys</b>.

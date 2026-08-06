@@ -3,8 +3,9 @@
  * comes from. Render it behind an env flag so it is dead-code-eliminated in
  * production builds (see README for the Next.js pattern).
  *
- * Ways to inspect: click the crosshair button (or the hotkey, default
- * Ctrl+Shift+X) to arm, or hold the hover modifier (default Alt) and hover.
+ * Ways to inspect: open the wrench launcher and click the crosshair (or use
+ * the hotkey, default Ctrl+Shift+X) to arm, or hold the hover modifier
+ * (default Alt) and hover.
  * Click an element to lock the panel: Source shows the component chain with
  * file:line (click a row to open in the editor), Props/State show live data,
  * History revisits recent picks, and arrow keys walk the DOM while locked.
@@ -40,6 +41,7 @@ import {
   CrosshairIcon,
   ExternalLinkIcon,
   RefreshIcon,
+  WrenchIcon,
   XIcon,
   ZapIcon,
 } from "./icons";
@@ -65,7 +67,7 @@ export interface DevInspectorProps {
   hotkey?: string;
   /** Modifier held to hover-inspect without arming. Default "alt". */
   hoverModifier?: HoverModifier;
-  /** localStorage key for the persisted button-cluster position. */
+  /** localStorage key for the persisted launcher-button position. */
   storageKey?: string;
   /** Base z-index for the overlay layers. */
   zIndex?: number;
@@ -127,7 +129,9 @@ interface FlashRecord {
 type PanelTab = "source" | "props" | "state" | "history";
 
 const BUTTON_SIZE = 40;
-const CLUSTER_HEIGHT = BUTTON_SIZE * 2 + 6;
+const BUTTON_GAP = 6;
+/** Extra height the menu adds beyond the launcher when expanded (2 actions). */
+const MENU_EXTRA = (BUTTON_SIZE + BUTTON_GAP) * 2;
 const PANEL_WIDTH = 420;
 const HISTORY_LIMIT = 8;
 
@@ -193,7 +197,7 @@ function hexAlpha(hex: string, alpha: number): string {
 
 const clampToViewport = (pos: Position): Position => ({
   x: Math.min(Math.max(pos.x, 8), window.innerWidth - BUTTON_SIZE - 8),
-  y: Math.min(Math.max(pos.y, 8), window.innerHeight - CLUSTER_HEIGHT - 8),
+  y: Math.min(Math.max(pos.y, 8), window.innerHeight - BUTTON_SIZE - 8),
 });
 
 const loadPosition = (storageKey: string): Position => {
@@ -208,7 +212,7 @@ const loadPosition = (storageKey: string): Position => {
   } catch {
     // Corrupt/unavailable storage — fall through to the default corner.
   }
-  return { x: 16, y: window.innerHeight - CLUSTER_HEIGHT - 16 };
+  return { x: 16, y: window.innerHeight - BUTTON_SIZE - 16 };
 };
 
 const isOwnUi = (target: EventTarget | null): boolean =>
@@ -218,6 +222,18 @@ const locationText = (entry: InspectedEntry): string | null =>
   entry.location
     ? `${entry.location.file}${entry.location.line1 ? `:${entry.location.line1}` : ""}`
     : null;
+
+const fabStyle: React.CSSProperties = {
+  width: BUTTON_SIZE,
+  height: BUTTON_SIZE,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "1px solid #3f3f46",
+  borderRadius: "50%",
+  cursor: "pointer",
+  boxShadow: "0 2px 10px rgba(0,0,0,0.35)",
+};
 
 const iconButtonStyle: React.CSSProperties = {
   background: "none",
@@ -381,6 +397,7 @@ function DevInspectorInner({
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [flashOn, setFlashOn] = useState(false);
   const [flashes, setFlashes] = useState<FlashRecord[]>([]);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const parsedHotkey = useMemo(() => parseHotkey(hotkey), [hotkey]);
   const resolverOptions = useMemo<ResolverOptions>(
@@ -630,16 +647,22 @@ function DevInspectorInner({
   const highlightBox = hover?.box ?? locked?.box ?? null;
   const labelBelow = (highlightRect?.top ?? 100) < 44;
 
-  // Panel follows the (draggable) button cluster: above it when in the lower
-  // half of the viewport, below it otherwise; clamped horizontally.
-  const panelAbove = pos.y > window.innerHeight / 2;
+  // The action menu drops away from the nearest edge: upward when the
+  // launcher sits in the lower half of the viewport, downward otherwise.
+  const menuUp = pos.y > window.innerHeight / 2;
+  const menuExtra = menuOpen ? MENU_EXTRA : 0;
+
+  // Panel follows the (draggable) launcher: above it when in the lower half
+  // of the viewport, below it otherwise; clears the open menu; clamped
+  // horizontally.
+  const panelAbove = menuUp;
   const panelLeft = Math.min(
     Math.max(pos.x, 8),
     Math.max(8, window.innerWidth - PANEL_WIDTH - 16)
   );
   const panelAnchor: React.CSSProperties = panelAbove
-    ? { bottom: window.innerHeight - pos.y + 12 }
-    : { top: pos.y + CLUSTER_HEIGHT + 12 };
+    ? { bottom: window.innerHeight - pos.y + 12 + menuExtra }
+    : { top: pos.y + BUTTON_SIZE + 12 + menuExtra };
 
   const selectedEntry = locked?.entries[selectedIdx] ?? null;
 
@@ -1055,22 +1078,24 @@ function DevInspectorInner({
         </div>
       )}
 
-      {/* Button cluster — crosshair is also the drag handle */}
+      {/* Launcher — one draggable button; the actions drop out of it one
+          after another (away from the nearest viewport edge) and tuck back
+          in when it is clicked again. */}
       <div
         style={{
           position: "fixed",
           top: pos.y,
           left: pos.x,
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
+          width: BUTTON_SIZE,
+          height: BUTTON_SIZE,
           zIndex: zIndex + 3,
         }}
       >
         <button
           type="button"
-          aria-label={`Toggle element inspector (${hotkeyLabel})`}
-          title={`Inspect element source (${hotkeyLabel}) · drag to move${modifierLabel ? ` · or ${modifierLabel}+hover` : ""}`}
+          aria-label={menuOpen ? "Close inspector menu" : "Open inspector menu"}
+          aria-expanded={menuOpen}
+          title={`Dev inspector · click to ${menuOpen ? "close" : "open"} · drag to move`}
           onPointerDown={(e) => {
             dragRef.current = {
               pointerStart: { x: e.clientX, y: e.clientY },
@@ -1111,52 +1136,98 @@ function DevInspectorInner({
               draggedRef.current = false;
               return;
             }
-            setLocked(null);
-            setHover(null);
-            setActive((prev) => !prev);
+            setMenuOpen((prev) => !prev);
           }}
           style={{
-            width: BUTTON_SIZE,
-            height: BUTTON_SIZE,
+            ...fabStyle,
+            position: "relative",
+            zIndex: 1,
             touchAction: "none",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: active ? accent : "#18181b",
-            color: active ? "#ffffff" : "#a1a1aa",
-            border: "1px solid #3f3f46",
-            borderRadius: "50%",
-            cursor: "pointer",
-            boxShadow: "0 2px 10px rgba(0,0,0,0.35)",
+            background: "#18181b",
+            color: menuOpen ? "#e4e4e7" : "#a1a1aa",
           }}
         >
-          <CrosshairIcon size={18} />
+          <span
+            style={{
+              display: "flex",
+              transition: "transform 200ms ease",
+              transform: menuOpen ? "rotate(90deg)" : "none",
+            }}
+          >
+            {menuOpen ? <XIcon size={18} /> : <WrenchIcon size={18} />}
+          </span>
+          {!menuOpen && (active || flashOn) && (
+            <span
+              style={{
+                position: "absolute",
+                top: 1,
+                right: 1,
+                width: 9,
+                height: 9,
+                borderRadius: "50%",
+                background: active ? accent : flashColor,
+                border: "2px solid #18181b",
+              }}
+            />
+          )}
         </button>
-        <button
-          type="button"
-          aria-label="Toggle update flashes"
-          title={
-            getRenderBridge()
+        {[
+          {
+            key: "inspect",
+            label: `Toggle element inspector (${hotkeyLabel})`,
+            title: `Inspect element source (${hotkeyLabel})${modifierLabel ? ` · or ${modifierLabel}+hover` : ""}`,
+            on: active,
+            onColor: accent,
+            icon: <CrosshairIcon size={18} />,
+            onClick: () => {
+              setLocked(null);
+              setHover(null);
+              setActive((prev) => !prev);
+            },
+          },
+          {
+            key: "flash",
+            label: "Toggle update flashes",
+            title: getRenderBridge()
               ? "Flash component re-renders as they happen"
-              : "Flash DOM updates as they happen (install next-dev-inspector/hook for true re-renders)"
-          }
-          onClick={() => setFlashOn((prev) => !prev)}
-          style={{
-            width: BUTTON_SIZE,
-            height: BUTTON_SIZE,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: flashOn ? flashColor : "#18181b",
-            color: flashOn ? "#ffffff" : "#a1a1aa",
-            border: "1px solid #3f3f46",
-            borderRadius: "50%",
-            cursor: "pointer",
-            boxShadow: "0 2px 10px rgba(0,0,0,0.35)",
-          }}
-        >
-          <ZapIcon size={18} />
-        </button>
+              : "Flash DOM updates as they happen (install next-dev-inspector/hook for true re-renders)",
+            on: flashOn,
+            onColor: flashColor,
+            icon: <ZapIcon size={18} />,
+            onClick: () => setFlashOn((prev) => !prev),
+          },
+        ].map((action, index, actions) => {
+          const offset = (BUTTON_SIZE + BUTTON_GAP) * (index + 1);
+          return (
+            <button
+              key={action.key}
+              type="button"
+              aria-label={action.label}
+              aria-hidden={!menuOpen}
+              tabIndex={menuOpen ? 0 : -1}
+              title={action.title}
+              onClick={action.onClick}
+              style={{
+                ...fabStyle,
+                position: "absolute",
+                left: 0,
+                [menuUp ? "bottom" : "top"]: offset,
+                background: action.on ? action.onColor : "#18181b",
+                color: action.on ? "#ffffff" : "#a1a1aa",
+                opacity: menuOpen ? 1 : 0,
+                transform: menuOpen
+                  ? "none"
+                  : `translateY(${menuUp ? offset : -offset}px) scale(0.5)`,
+                pointerEvents: menuOpen ? "auto" : "none",
+                transition:
+                  "transform 220ms cubic-bezier(0.34, 1.3, 0.64, 1), opacity 160ms ease",
+                transitionDelay: `${(menuOpen ? index : actions.length - 1 - index) * 60}ms`,
+              }}
+            >
+              {action.icon}
+            </button>
+          );
+        })}
       </div>
     </div>,
     document.body

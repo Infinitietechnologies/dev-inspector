@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 — 2026-08-06
+
+- **Single launcher button**: the two stacked floating buttons are now one
+  wrench launcher. Clicking it drops the crosshair and Zap actions out with a
+  staggered animation (downward, or upward when near the bottom edge) and
+  clicking again tucks them back in. The launcher is the drag handle; while
+  collapsed, a colored dot shows when the inspector or flasher is active.
+
 ## 0.2.2 — 2026-08-06
 
 - **Crash shield**: the widget is wrapped in an error boundary — if anything

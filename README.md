@@ -64,7 +64,7 @@ Zero runtime dependencies. Never ships to production when gated correctly
 - **Copy for AI** — one click copies chain + paths + props + i18n keys, ready
   to paste into Claude Code, Cursor, or any coding assistant
 - Alt+hover quick inspect, arrow-key DOM walking, configurable hotkeys
-- Draggable button cluster, position persisted to `localStorage`
+- Single draggable launcher button that expands into the action menu, position persisted to `localStorage`
 
 ## Requirements
 
@@ -162,8 +162,9 @@ whole package — is eliminated from production output.
 | Click (while inspecting) | Lock the details panel on that element |
 | <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> | Walk the DOM (parent / first child / siblings) while locked |
 | <kbd>Esc</kbd> | Close panel, disarm |
-| Crosshair button | Arm / disarm — also the drag handle for the cluster |
-| Zap button | Toggle the re-render / DOM-update flasher |
+| Wrench button | Open / close the action menu — also the drag handle |
+| Crosshair button (in menu) | Arm / disarm the inspector |
+| Zap button (in menu) | Toggle the re-render / DOM-update flasher |
 | Source row click | Open that file in your editor |
 | `{ }` icon on a row | Jump to that entry's Props tab |
 
@@ -249,7 +250,7 @@ All props are optional:
 | `enabled` | `boolean` | `true` | Render nothing when `false` (combine with env gating for DCE) |
 | `hotkey` | `string` | `"ctrl+shift+x"` | Arm/disarm combo — modifiers + key joined with `+` |
 | `hoverModifier` | `"alt" \| "ctrl" \| "meta" \| "shift" \| "none"` | `"alt"` | Held key that enables hover-inspect without arming; `"none"` disables |
-| `storageKey` | `string` | `"dev-inspector-pos"` | `localStorage` key for the button-cluster position |
+| `storageKey` | `string` | `"dev-inspector-pos"` | `localStorage` key for the launcher-button position |
 | `zIndex` | `number` | `2147483000` | Base z-index for all overlay layers |
 | `colors` | `{ accent?, accentLight?, flash? }` | violet / orange | Palette overrides, hex `#rrggbb` |
 | `editorEndpoint` | `string` | `"/__nextjs_launch-editor"` | GET endpoint that opens `file`/`line1`/`column1` in the editor |
