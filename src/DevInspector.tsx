@@ -473,6 +473,8 @@ function DevInspectorInner({
         )
       );
       entries.forEach((entry, index) => {
+        // React 18's `_debugSource` already contains an original location.
+        if (entry.location !== undefined) return;
         resolveLocation(entry.stackFrames, resolverOptions).then((location) => {
           setLocked((prev) =>
             prev && prev.el === el
@@ -514,13 +516,17 @@ function DevInspectorInner({
       }
       const componentName =
         chain.find((entry) => entry.kind === "component")?.name ?? chain[0].name;
+      const immediateLocation = chain[0].location;
       setHover({
         el,
         rect: el.getBoundingClientRect(),
         box: getBoxModel(el),
         name: componentName,
-        locationLabel: null,
+        locationLabel: immediateLocation
+          ? `${immediateLocation.file}${immediateLocation.line1 ? `:${immediateLocation.line1}` : ""}`
+          : null,
       });
+      if (immediateLocation !== undefined) return;
       resolveLocation(chain[0].stackFrames, resolverOptions).then((location) => {
         setHover((prev) =>
           prev && prev.el === el

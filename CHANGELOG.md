@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 — 2026-08-22
+
+- Fix source file and line lookup for SSR/App Router Server Components by
+  reading React 19 `_debugInfo`, resolving `about://React/Server/` frames in
+  the server compilation, and restoring React 18 `_debugSource` support.
+
 ## 0.4.0 — 2026-08-06
 
 - **`editor` prop**: force a specific editor (`"vscode"`, `"vscode-insiders"`,

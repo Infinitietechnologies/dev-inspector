@@ -9,6 +9,8 @@ export interface RawStackFrame {
   file: string;
   line1: number;
   column1: number;
+  /** Runtime hint carried by React Server Component debug metadata. */
+  runtime?: "client" | "server" | "edge-server";
 }
 
 // "at Comp (http://host/chunk.js:10:20)" | "at http://host/chunk.js:10:20"

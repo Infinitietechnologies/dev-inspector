@@ -17,10 +17,30 @@ import {
 import { originalPositionFor, SourceMapPayload } from "./sourceMap";
 
 interface ReactFiber {
+  tag?: number;
   type: unknown;
   memoizedProps?: unknown;
-  _debugOwner?: ReactFiber | null;
+  _debugOwner?: ReactFiber | ReactComponentInfo | null;
   _debugStack?: Error | string | null;
+  _debugSource?: ReactDebugSource | null;
+  _debugInfo?: unknown[] | null;
+}
+
+interface ReactDebugSource {
+  fileName?: string;
+  lineNumber?: number;
+  columnNumber?: number;
+}
+
+/** React 19's client-side representation of Server Component debug data. */
+interface ReactComponentInfo {
+  name?: string;
+  env?: string;
+  owner?: ReactComponentInfo | null;
+  props?: unknown;
+  stack?: unknown;
+  debugStack?: Error | string | null;
+  debugLocation?: Error | string | null;
 }
 
 export type EditorProtocol =
@@ -107,11 +127,70 @@ function getDisplayName(type: unknown): string | null {
   return null;
 }
 
-function getStackFrames(fiber: ReactFiber): RawStackFrame[] {
-  const debugStack = fiber._debugStack;
+function parseDebugStack(
+  debugStack: Error | string | null | undefined
+): RawStackFrame[] {
   const stack =
     typeof debugStack === "string" ? debugStack : debugStack?.stack;
   return parseComponentStack(stack);
+}
+
+function parseServerComponentStack(stack: unknown): RawStackFrame[] {
+  if (!Array.isArray(stack)) return [];
+  const frames: RawStackFrame[] = [];
+  for (const value of stack) {
+    if (!Array.isArray(value)) continue;
+    const [methodName, file, line1, column1] = value;
+    if (
+      typeof file === "string" &&
+      typeof line1 === "number" &&
+      typeof column1 === "number"
+    ) {
+      frames.push({
+        methodName: typeof methodName === "string" ? methodName : "<unknown>",
+        file,
+        line1,
+        column1,
+      });
+    }
+  }
+  return frames;
+}
+
+function getStackFrames(fiber: ReactFiber): RawStackFrame[] {
+  return parseDebugStack(fiber._debugStack);
+}
+
+function getComponentInfoFrames(info: ReactComponentInfo): RawStackFrame[] {
+  let frames = parseDebugStack(info.debugStack);
+  if (frames.length === 0) frames = parseDebugStack(info.debugLocation);
+  if (frames.length === 0) frames = parseServerComponentStack(info.stack);
+  const runtime = /edge/i.test(info.env ?? "") ? "edge-server" : "server";
+  return frames.map((frame) => ({ ...frame, runtime }));
+}
+
+function isComponentInfo(value: unknown): value is ReactComponentInfo {
+  return !!value && typeof value === "object" && !("type" in value);
+}
+
+function debugSourceLocation(
+  source: ReactDebugSource | null | undefined
+): ResolvedLocation | undefined {
+  if (
+    !source ||
+    typeof source.fileName !== "string" ||
+    typeof source.lineNumber !== "number"
+  ) {
+    return undefined;
+  }
+  const info = describeSource(source.fileName);
+  if (info.ignored) return undefined;
+  return {
+    file: info.display,
+    editorFile: info.editorFile,
+    line1: source.lineNumber,
+    column1: source.columnNumber ?? null,
+  };
 }
 
 function describeHost(fiber: ReactFiber, el: Element): string {
@@ -129,23 +208,83 @@ export function buildInspectChain(el: Element): InspectedEntry[] {
   const fiber = getFiberFromNode(el);
   if (!fiber) return [];
 
+  const debugInfo = fiber._debugInfo;
+  const serverRuntime = Array.isArray(debugInfo)
+    ? debugInfo.find(
+        (value): value is ReactComponentInfo =>
+          isComponentInfo(value) && typeof value.env === "string"
+      )?.env
+    : undefined;
+  const hostRuntime: RawStackFrame["runtime"] = serverRuntime
+    ? /edge/i.test(serverRuntime)
+      ? "edge-server"
+      : "server"
+    : undefined;
+  let hostFrames = getStackFrames(fiber);
+  if (hostFrames.length === 0 && Array.isArray(debugInfo)) {
+    for (let i = debugInfo.length - 1; i >= 0; i--) {
+      const info = debugInfo[i];
+      if (!isComponentInfo(info)) continue;
+      hostFrames = parseDebugStack(info.debugLocation);
+      if (hostFrames.length > 0) break;
+    }
+  }
+  hostFrames = hostFrames.map((frame) =>
+    hostRuntime ? { ...frame, runtime: hostRuntime } : frame
+  );
+
   const entries: InspectedEntry[] = [
     {
       name: describeHost(fiber, el),
       kind: "host",
-      stackFrames: getStackFrames(fiber),
+      stackFrames: hostFrames,
       props: fiber.memoizedProps,
+      location: debugSourceLocation(fiber._debugSource),
     },
   ];
+
+  // React 19 transports Server Component names, props, and callsites in
+  // `_debugInfo` instead of representing those components as client fibers.
+  // React stores the outer component first, so reverse it for the same
+  // innermost-first order as the normal `_debugOwner` chain.
+  const seenComponentInfo = new Set<ReactComponentInfo>();
+  const appendComponentInfo = (start: ReactComponentInfo) => {
+    let info: ReactComponentInfo | null | undefined = start;
+    let depth = 0;
+    while (info && depth++ < MAX_OWNER_DEPTH && !seenComponentInfo.has(info)) {
+      seenComponentInfo.add(info);
+      if (typeof info.name === "string") {
+        entries.push({
+          name: info.name,
+          kind: "component",
+          stackFrames: getComponentInfoFrames(info),
+          props: info.props,
+        });
+      }
+      info = info.owner;
+    }
+  };
+  if (Array.isArray(debugInfo)) {
+    for (let i = debugInfo.length - 1; i >= 0; i--) {
+      const info = debugInfo[i];
+      if (isComponentInfo(info)) appendComponentInfo(info);
+    }
+  }
 
   let owner = fiber._debugOwner;
   let depth = 0;
   while (owner && depth++ < MAX_OWNER_DEPTH) {
+    if (isComponentInfo(owner)) {
+      appendComponentInfo(owner);
+      owner = owner.owner;
+      continue;
+    }
     entries.push({
       name: getDisplayName(owner.type) ?? "Anonymous",
       kind: "component",
       stackFrames: getStackFrames(owner),
       props: owner.memoizedProps,
+      location: debugSourceLocation(owner._debugSource),
     });
     owner = owner._debugOwner;
   }
@@ -256,14 +395,26 @@ async function resolveViaServer(
 ): Promise<ResolvedLocation | null> {
   if (frames.length === 0) return null;
   try {
+    const isEdgeServer = frames.some(
+      (frame) => frame.runtime === "edge-server"
+    );
+    const isServer =
+      !isEdgeServer &&
+      frames.some(
+        (frame) =>
+          frame.runtime === "server" ||
+          /^about:\/\/React\/Server\//i.test(frame.file)
+      );
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         frames,
-        isServer: false,
-        isEdgeServer: false,
-        isAppDirectory: false,
+        // RSC stacks use this URL scheme. Older Next versions require the
+        // server/app flags to select the correct source-map compilation.
+        isServer,
+        isEdgeServer,
+        isAppDirectory: isServer || isEdgeServer,
       }),
     });
     if (!res.ok) return null;
@@ -305,9 +456,9 @@ export function resolveLocation(
       ? DEFAULT_STACK_FRAMES_ENDPOINT
       : options.stackFramesEndpoint;
 
-  const cacheKey = batch
-    .map((f) => `${f.file}:${f.line1}:${f.column1}`)
-    .join("|");
+  const cacheKey = `${stackFramesEndpoint ?? "<disabled>"}|${batch
+    .map((f) => `${f.runtime ?? "client"}:${f.file}:${f.line1}:${f.column1}`)
+    .join("|")}`;
   const cached = locationCache.get(cacheKey);
   if (cached) return cached;
 

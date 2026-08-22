@@ -355,9 +355,10 @@ be imported from server components.
 
 ## How it works
 
-- **React 19 removed `_debugSource`.** Source locations are recovered from the
-  dev-only fiber `_debugStack` — an `Error` captured at each JSX callsite —
-  walking the `_debugOwner` chain. This exists only in development React.
+- **React 18/19 source metadata:** React 18 locations come from `_debugSource`;
+  React 19 client locations come from `_debugStack`. App Router Server
+  Components are recovered from React 19's `_debugInfo` records and their
+  server stack frames. These fields exist only in development React.
 - **Turbopack (`next dev`):** the widget fetches the chunk's sibling
   `<chunk>.js.map` and decodes it client-side (index maps with `sections[]`,
   `file:///` sources). The dev server's `POST /__nextjs_original-stack-frames`
@@ -365,6 +366,8 @@ be imported from server components.
   URLs and returns identity mappings.
 - **webpack (`next dev`):** `webpack-internal:///` frames fall back to the
   server resolver endpoint.
+- **SSR / React Server Components:** `about://React/Server/` frames are sent
+  to the Next resolver with the server + App Router compilation flags.
 - **Open in editor** uses `GET /__nextjs_launch-editor?file=&line1=&column1=`,
   which accepts `file://` URLs, absolute paths, and project-relative paths.
 - **Re-render hook:** the inline script installs a minimal
@@ -391,6 +394,7 @@ be imported from server components.
 | Symptom | Likely cause / fix |
 |---|---|
 | Every entry says `library / generated` | Source maps unreachable — make sure you're on `next dev` (not a production build) and same-origin |
+| Server Component rows have no file/line | Upgrade to a version with SSR/RSC `_debugInfo` support; production `next start` cannot expose dev-only locations |
 | Rows never resolve on webpack dev | The fallback POSTs to `stackFramesEndpoint`; check it isn't disabled and the dev server is current |
 | Clicking a row doesn't open the editor | The dev server's launch-editor couldn't find an editor — try opening a file from a Next error overlay to verify |
 | Flashes have no component names | The early hook isn't installed — see [the hook section](#true-re-render-flashes-optional-hook); it must render before React loads |
