@@ -24,6 +24,7 @@ Zero runtime dependencies. Never ships to production when gated correctly
 - [Quick start](#quick-start)
 - [Production safety (dead-code elimination)](#production-safety-dead-code-elimination)
 - [Controls](#controls)
+- [Component browser and panel layout](#component-browser-and-panel-layout)
 - [Props change tracking](#props-change-tracking)
 - [True re-render flashes (optional hook)](#true-re-render-flashes-optional-hook)
 - [Copy for AI](#copy-for-ai)
@@ -64,6 +65,11 @@ Zero runtime dependencies. Never ships to production when gated correctly
   back to flashing raw DOM mutations
 
 **Work fast**
+
+- **Component browser** — search component names, step through matching
+  instances, and navigate a collapsible owner tree to select source and props
+- **Dockable, resizable panel** — float beside the launcher or dock left/right;
+  drag the panel edge to resize, with position and width saved locally
 
 - **Copy for AI** — one click copies chain + paths + props + i18n keys, ready
   to paste into Claude Code, Cursor, or any coding assistant
@@ -171,6 +177,29 @@ whole package — is eliminated from production output.
 | Zap button (in menu) | Toggle the re-render / DOM-update flasher |
 | Source row click | Open that file in your editor |
 | `{ }` icon on a row | Jump to that entry's Props tab |
+
+## Component browser and panel layout
+
+Open the wrench menu and choose **Browse components**, or use the **Tree** tab
+after inspecting an element. Search is case-insensitive; **Previous** and
+**Next** (or Enter / Shift+Enter in the search field) step through instances.
+Hover a row to highlight its rendered element. Select a row to scroll to it,
+then open **Source** or **Props** to inspect that component.
+
+Expand/collapse rows to explore owners and their children. Focus a tree row
+and use Up/Down to navigate, Left/Right to collapse/expand, or Enter to select.
+Use **Refresh** after navigation, conditional rendering, or code edits.
+
+The tree represents the owner chains of components with DOM elements in the
+current document, including available Server Component debug metadata. It omits
+components with no rendered element, iframe contents, shadow-root contents,
+and the inspector's own UI. Large pages are capped at 5,000 DOM elements and
+1,000 component instances, with a visible truncation notice.
+
+Use the **Panel** selector to float or dock left/right. Drag the outside edge
+(the left edge when docked right) to resize, or focus that edge and use
+Left/Right. Width stays within the viewport. Layout is stored under
+`<storageKey>:panel`; docking overlays the page without changing its layout.
 
 ## Props change tracking
 

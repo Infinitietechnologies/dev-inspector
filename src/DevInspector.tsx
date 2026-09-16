@@ -33,6 +33,8 @@ import {
 } from "./fiber";
 import { JsonTree } from "./JsonTree";
 import { PropsPanel } from "./PropsPanel";
+import { ComponentBrowser } from "./ComponentBrowser";
+import { InspectorPanel } from "./InspectorPanel";
 import { buildAiContext } from "./aiContext";
 import type { FlashEvent } from "./flasher";
 import { getRenderBridge, startFlasher, startRenderFlasher } from "./flasher";
@@ -140,13 +142,12 @@ interface FlashRecord {
   name?: string | null;
 }
 
-type PanelTab = "source" | "props" | "state" | "history";
+type PanelTab = "source" | "props" | "state" | "history" | "tree";
 
 const BUTTON_SIZE = 40;
 const BUTTON_GAP = 6;
-/** Extra height the menu adds beyond the launcher when expanded (2 actions). */
-const MENU_EXTRA = (BUTTON_SIZE + BUTTON_GAP) * 2;
-const PANEL_WIDTH = 420;
+/** Extra height the menu adds beyond the launcher when expanded (3 actions). */
+const MENU_EXTRA = (BUTTON_SIZE + BUTTON_GAP) * 3;
 const HISTORY_LIMIT = 8;
 
 interface Position {
@@ -414,6 +415,8 @@ function DevInspectorInner({
   const [flashOn, setFlashOn] = useState(false);
   const [flashes, setFlashes] = useState<FlashRecord[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const [preview, setPreview] = useState<HoverState | null>(null);
 
   const parsedHotkey = useMemo(() => parseHotkey(hotkey), [hotkey]);
   const resolverOptions = useMemo<ResolverOptions>(
@@ -442,7 +445,7 @@ function DevInspectorInner({
   }, [enabled, storageKey]);
 
   const lockElement = useCallback(
-    (el: Element) => {
+    (el: Element, identity?: object) => {
       const entries = buildInspectChain(el);
       const text = el.textContent ?? "";
       const i18nSource = getI18nData?.() ?? null;
@@ -460,9 +463,10 @@ function DevInspectorInner({
       });
       setHover(null);
       setActive(false);
-      setTab("source");
+      setTab(identity ? "tree" : "source");
       const firstComponent = entries.findIndex((e) => e.kind === "component");
-      setSelectedIdx(firstComponent === -1 ? 0 : firstComponent);
+      const chosen = identity ? entries.findIndex(entry => entry.identity === identity) : -1;
+      setSelectedIdx(chosen >= 0 ? chosen : firstComponent === -1 ? 0 : firstComponent);
       const label =
         entries.find((e) => e.kind === "component")?.name ??
         entries[0]?.name ??
@@ -593,12 +597,16 @@ function DevInspectorInner({
     if (!enabled) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        setBrowserOpen(false);
+        setPreview(null);
         setActive(false);
         setHover(null);
         setLocked(null);
         return;
       }
       if (matchesHotkey(e, parsedHotkey)) {
+        setBrowserOpen(false);
+        setPreview(null);
         e.preventDefault();
         setLocked(null);
         setHover(null);
@@ -606,6 +614,8 @@ function DevInspectorInner({
         return;
       }
       const el = lockedElRef.current;
+      // Inputs, tree navigation and the resize handle own their arrow keys.
+      if (isOwnUi(e.target) || (e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable]"))) return;
       if (!el || !e.key.startsWith("Arrow")) return;
       const next =
         e.key === "ArrowUp"
@@ -659,14 +669,29 @@ function DevInspectorInner({
     Promise.resolve(getStateSnapshot()).then(setStateSnapshot);
   }, [tab, locked, getStateSnapshot]);
 
+  useEffect(() => {
+    if (!enabled || (!locked && !preview)) return;
+    let frame = 0;
+    const update = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        setLocked(previous => previous && previous.el.isConnected ? { ...previous, rect: previous.el.getBoundingClientRect(), box: getBoxModel(previous.el) } : previous);
+        setPreview(previous => previous && previous.el.isConnected ? { ...previous, rect: previous.el.getBoundingClientRect(), box: getBoxModel(previous.el) } : null);
+      });
+    };
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("scroll", update, true); window.removeEventListener("resize", update); };
+  }, [enabled, locked?.el, preview?.el]);
+
   if (!enabled || pos === null) return null;
 
   const modifierLabel =
     hoverModifier === "none" ? null : capitalize(hoverModifier);
   const hotkeyLabel = formatHotkey(hotkey);
 
-  const highlightRect = hover?.rect ?? locked?.rect ?? null;
-  const highlightBox = hover?.box ?? locked?.box ?? null;
+  const highlightRect = preview?.rect ?? hover?.rect ?? locked?.rect ?? null;
+  const highlightBox = preview?.box ?? hover?.box ?? locked?.box ?? null;
   const labelBelow = (highlightRect?.top ?? 100) < 44;
 
   // The action menu drops away from the nearest edge: upward when the
@@ -678,13 +703,6 @@ function DevInspectorInner({
   // of the viewport, below it otherwise; clears the open menu; clamped
   // horizontally.
   const panelAbove = menuUp;
-  const panelLeft = Math.min(
-    Math.max(pos.x, 8),
-    Math.max(8, window.innerWidth - PANEL_WIDTH - 16)
-  );
-  const panelAnchor: React.CSSProperties = panelAbove
-    ? { bottom: window.innerHeight - pos.y + 12 + menuExtra }
-    : { top: pos.y + BUTTON_SIZE + 12 + menuExtra };
 
   const selectedEntry = locked?.entries[selectedIdx] ?? null;
 
@@ -692,7 +710,8 @@ function DevInspectorInner({
     <button
       key={id}
       type="button"
-      onClick={() => setTab(id)}
+      disabled={!locked && id !== "tree"}
+      onClick={() => { setTab(id); setPreview(null); }}
       style={{
         background: "none",
         border: "none",
@@ -800,35 +819,20 @@ function DevInspectorInner({
       )}
 
       {/* Locked details panel */}
-      {locked && (
-        <div
-          style={{
-            position: "fixed",
-            ...panelAnchor,
-            left: panelLeft,
-            width: PANEL_WIDTH,
-            maxWidth: "calc(100vw - 32px)",
-            maxHeight: "60vh",
-            display: "flex",
-            flexDirection: "column",
-            background: "#18181b",
-            color: "#e4e4e7",
-            border: "1px solid #3f3f46",
-            borderRadius: 10,
-            boxShadow: "0 8px 30px rgba(0,0,0,0.45)",
-            font: "12px/1.5 ui-monospace, monospace",
-            zIndex: zIndex + 2,
-          }}
-        >
+      {(locked || browserOpen) && (
+        <InspectorPanel storageKey={`${storageKey}:panel`} x={pos.x} y={pos.y} above={panelAbove} menuExtra={menuExtra} zIndex={zIndex + 2}>
           <div
             style={{
               display: "flex",
+              flexWrap: "wrap",
+              flexShrink: 0,
               alignItems: "center",
               gap: 4,
               padding: "6px 12px 0",
               borderBottom: "1px solid #3f3f46",
             }}
           >
+            {tabButton("tree", "Tree")}
             {tabButton("source", "Source")}
             {tabButton("props", "Props")}
             {getStateSnapshot && tabButton("state", "State")}
@@ -837,14 +841,24 @@ function DevInspectorInner({
             <button
               type="button"
               aria-label="Close inspector panel"
-              onClick={() => setLocked(null)}
+              onClick={() => { setLocked(null); setBrowserOpen(false); setPreview(null); }}
               style={{ ...iconButtonStyle, color: "#a1a1aa" }}
             >
               <XIcon size={14} />
             </button>
           </div>
 
-          <div style={{ overflowY: "auto", padding: "4px 0" }}>
+          <div style={{ overflowY: "auto", minHeight: 0, flex: 1, padding: "4px 0" }}>
+            {tab === "tree" && <ComponentBrowser
+              onSelect={node => {
+                node.element.scrollIntoView?.({ block: "center", inline: "nearest" });
+                setPreview(null);
+                lockElement(node.element, node.identity);
+              }}
+              onPreview={node => setPreview(node && node.element.isConnected ? {
+                el: node.element, rect: node.element.getBoundingClientRect(), box: getBoxModel(node.element), name: node.entry.name, locationLabel: null,
+              } : null)} />}
+            {locked && <>
             {tab === "source" && (
               <>
                 {locked.className && (
@@ -1068,6 +1082,7 @@ function DevInspectorInner({
                 })}
               </div>
             )}
+            </>}
           </div>
 
           <div
@@ -1077,15 +1092,18 @@ function DevInspectorInner({
               gap: 8,
               padding: "6px 12px",
               borderTop: "1px solid #3f3f46",
+              flexShrink: 0,
               color: "#71717a",
               fontSize: 10,
             }}
           >
             <span style={{ flex: 1 }}>
-              {modifierLabel ? `${modifierLabel}+hover to inspect · ` : ""}
-              ↑↓←→ walk DOM · click row → editor · Esc close
+              {tab === "tree" ? "↑↓ navigate · ←→ collapse/expand · Enter select · Esc close" : <>
+                {modifierLabel ? `${modifierLabel}+hover to inspect · ` : ""}
+                ↑↓←→ walk DOM · click row → editor · Esc close
+              </>}
             </span>
-            <CopyAiButton
+            {locked && <CopyAiButton
               accent={accentLight}
               getText={() =>
                 buildAiContext({
@@ -1095,9 +1113,9 @@ function DevInspectorInner({
                   selectedIdx,
                 })
               }
-            />
+            />}
           </div>
-        </div>
+        </InspectorPanel>
       )}
 
       {/* Launcher — one draggable button; the actions drop out of it one
@@ -1202,10 +1220,21 @@ function DevInspectorInner({
             onColor: accent,
             icon: <CrosshairIcon size={18} />,
             onClick: () => {
+              setBrowserOpen(false);
+              setPreview(null);
               setLocked(null);
               setHover(null);
               setActive((prev) => !prev);
             },
+          },
+          {
+            key: "tree",
+            label: "Browse components",
+            title: "Search and browse the component tree",
+            on: browserOpen && tab === "tree",
+            onColor: accent,
+            icon: <BracesIcon size={18} />,
+            onClick: () => { setBrowserOpen(true); setTab("tree"); setActive(false); setHover(null); setMenuOpen(false); },
           },
           {
             key: "flash",

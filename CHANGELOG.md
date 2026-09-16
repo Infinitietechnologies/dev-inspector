@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0 — 2026-09-16
+
+- Add a searchable component browser with an owner tree, instance navigation,
+  element highlighting, and selection for source and props inspection.
+- Add left/right panel docking and pointer/keyboard resizing, with saved layout.
+- Keep tree/search/resize keyboard interaction separate from DOM navigation;
+  update selection highlights when the page scrolls or the viewport resizes.
+
 ## 0.5.0 — 2026-09-16
 
 - Add live Props tab change tracking with before/after previews, added/removed
