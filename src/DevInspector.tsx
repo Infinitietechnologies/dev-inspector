@@ -32,6 +32,7 @@ import {
   resolveLocation,
 } from "./fiber";
 import { JsonTree } from "./JsonTree";
+import { PropsPanel } from "./PropsPanel";
 import { buildAiContext } from "./aiContext";
 import type { FlashEvent } from "./flasher";
 import { getRenderBridge, startFlasher, startRenderFlasher } from "./flasher";
@@ -991,7 +992,7 @@ function DevInspectorInner({
                         : `<${selectedEntry.name}>`}
                       <span style={{ color: "#52525b" }}> props</span>
                     </div>
-                    <JsonTree value={selectedEntry.props} />
+                    <PropsPanel el={locked.el} index={selectedIdx} />
                   </>
                 ) : (
                   <span style={{ color: "#71717a" }}>Nothing selected.</span>

@@ -24,6 +24,7 @@ Zero runtime dependencies. Never ships to production when gated correctly
 - [Quick start](#quick-start)
 - [Production safety (dead-code elimination)](#production-safety-dead-code-elimination)
 - [Controls](#controls)
+- [Props change tracking](#props-change-tracking)
 - [True re-render flashes (optional hook)](#true-re-render-flashes-optional-hook)
 - [Copy for AI](#copy-for-ai)
 - [Configuration](#configuration)
@@ -47,6 +48,9 @@ Zero runtime dependencies. Never ships to production when gated correctly
 **Understand the state**
 
 - **Props** tab — live props of any component in the chain (compact JSON tree)
+- **Props change tracking** — before/after previews for the latest observed
+  changes, including added/removed props and changed object/function references;
+  pause/resume sampling or reset the comparison baseline
 - **State** tab — snapshot of your store; Redux, Zustand, Jotai, anything —
   you supply the getter
 - **i18n reverse lookup** — which translation key produced this rendered text
@@ -167,6 +171,17 @@ whole package — is eliminated from production output.
 | Zap button (in menu) | Toggle the re-render / DOM-update flasher |
 | Source row click | Open that file in your editor |
 | `{ }` icon on a row | Jump to that entry's Props tab |
+
+## Props change tracking
+
+The Props tab samples the selected component every 250 ms while open, without
+requiring the early hook. It compares up to 200 own enumerable string-keyed
+props using `Object.is` and retains the latest change until another change or
+reset. Switching components or closing the tab starts a fresh comparison.
+Nested mutations of the same object and changes between samples may be missed.
+Before/after previews are truncated; identical previews can still represent
+different object or function references. These are observed prop changes,
+not proof of what caused a render.
 
 ## True re-render flashes (optional hook)
 

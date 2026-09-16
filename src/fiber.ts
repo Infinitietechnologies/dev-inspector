@@ -17,6 +17,11 @@ import {
 import { originalPositionFor, SourceMapPayload } from "./sourceMap";
 
 interface ReactFiber {
+  alternate?: ReactFiber | null;
+  return?: ReactFiber | null;
+  child?: ReactFiber | null;
+  sibling?: ReactFiber | null;
+  stateNode?: { current?: ReactFiber };
   tag?: number;
   type: unknown;
   memoizedProps?: unknown;
@@ -82,6 +87,8 @@ export interface ResolvedLocation {
 }
 
 export interface InspectedEntry {
+  /** Stable identity for comparing observations of the same component. */
+  identity?: object;
   /** "div.foo" for the host element, component name otherwise */
   name: string;
   kind: "host" | "component";
@@ -95,13 +102,67 @@ export interface InspectedEntry {
 const MAX_OWNER_DEPTH = 32;
 const MAX_FRAMES_PER_REQUEST = 12;
 
+const identities = new WeakMap<object, object>();
+function inspectionIdentity(value: ReactFiber | ReactComponentInfo): object {
+  const alternate = "type" in value ? value.alternate : null;
+  const identity = identities.get(value) ?? (alternate && identities.get(alternate)) ?? {};
+  identities.set(value, identity);
+  if (alternate) identities.set(alternate, identity);
+  return identity;
+}
+
+/** Resolve React's committed branch, including shared children after a bailout. */
+export function currentFiber(fiber: ReactFiber): ReactFiber | null {
+  const alternate = fiber.alternate;
+  if (!alternate) return fiber;
+  let a = fiber;
+  let b = alternate;
+  for (let depth = 0; depth < 1000; depth++) {
+    const parentA = a.return;
+    if (!parentA) return a.tag === 3
+      ? (a.stateNode?.current === a ? fiber : alternate) : null;
+    const parentB = parentA.alternate;
+    if (!parentB) {
+      if (!parentA.return) return null;
+      a = parentA.return;
+      continue;
+    }
+    if (parentA.child === parentB.child) {
+      for (let child = parentA.child; child; child = child.sibling) {
+        if (child === a) return fiber;
+        if (child === b) return alternate;
+      }
+      return null;
+    }
+    if (a.return !== b.return) {
+      a = parentA;
+      b = parentB;
+    } else {
+      let found = false;
+      for (const parent of [parentA, parentB]) {
+        for (let child = parent.child; child; child = child.sibling) {
+          if (child !== a && child !== b) continue;
+          const other = parent === parentA ? parentB : parentA;
+          [a, b] = child === a ? [parent, other] : [other, parent];
+          found = true;
+          break;
+        }
+        if (found) break;
+      }
+      if (!found) return null;
+    }
+    if (a.alternate !== b) return null;
+  }
+  return null;
+}
+
 export function getFiberFromNode(node: Node | null): ReactFiber | null {
   let el: Element | null =
     node instanceof Element ? node : (node?.parentElement ?? null);
   while (el) {
     const key = Object.keys(el).find((k) => k.startsWith("__reactFiber$"));
     if (key) {
-      return (el as unknown as Record<string, ReactFiber>)[key];
+      return currentFiber((el as unknown as Record<string, ReactFiber>)[key]);
     }
     el = el.parentElement;
   }
@@ -236,6 +297,7 @@ export function buildInspectChain(el: Element): InspectedEntry[] {
   const entries: InspectedEntry[] = [
     {
       name: describeHost(fiber, el),
+      identity: inspectionIdentity(fiber),
       kind: "host",
       stackFrames: hostFrames,
       props: fiber.memoizedProps,
@@ -256,6 +318,7 @@ export function buildInspectChain(el: Element): InspectedEntry[] {
       if (typeof info.name === "string") {
         entries.push({
           name: info.name,
+          identity: inspectionIdentity(info),
           kind: "component",
           stackFrames: getComponentInfoFrames(info),
           props: info.props,
@@ -279,8 +342,12 @@ export function buildInspectChain(el: Element): InspectedEntry[] {
       owner = owner.owner;
       continue;
     }
+    const currentOwner = currentFiber(owner);
+    if (!currentOwner) break;
+    owner = currentOwner;
     entries.push({
       name: getDisplayName(owner.type) ?? "Anonymous",
+      identity: inspectionIdentity(owner),
       kind: "component",
       stackFrames: getStackFrames(owner),
       props: owner.memoizedProps,

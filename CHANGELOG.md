@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0 — 2026-09-16
+
+- Add live Props tab change tracking with before/after previews, added/removed
+  props, reference-change indicators, pause/resume, and reset controls.
+- Resolve the committed React fiber branch when inspecting updated components.
+- Update development and demo dependencies to address security advisories.
+
 ## 0.4.1 — 2026-08-22
 
 - Fix source file and line lookup for SSR/App Router Server Components by
